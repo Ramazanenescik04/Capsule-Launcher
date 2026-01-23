@@ -25,6 +25,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.awt.event.ActionListener;
@@ -52,28 +53,30 @@ public class UpdateFrame extends JFrame implements ActionListener {
 					frame.setLocationRelativeTo(null);
 					frame.setVisible(true);
 					
-					UpdateManager um = UpdateManager.instance;
-					um.downloadCapsuleAndLibs();
-					um.installAndRunUpdate((dp) -> {
-						frame.bar.setIndeterminate(false);
-						frame.bar.setValue(dp.percent());
-						frame.statusText.setText(dp.progressName() + " - " + dp.toString());
-						
-						if (dp.isFinished()) {
-							frame.dispose();
-							try {
-								VersionChecker.saveUsingLatestVersion();
-							} catch (IOException e) {
-								e.printStackTrace();
-							}
+					new Thread(() ->{
+						UpdateManager um = UpdateManager.instance;
+						um.downloadCapsuleAndLibs();
+						um.installAndRunUpdate((dp) -> {
+							frame.bar.setIndeterminate(false);
+							frame.bar.setValue(dp.percent());
+							frame.statusText.setText(dp.progressName() + " - " + dp.toString());
 							
-							frame.startCapsule(um, args);
-						}
-					}, (crash) -> {
-						crash.printStackTrace();
-						JOptionPane.showMessageDialog(frame, "Update Error: " + crash.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-						frame.dispose();
-					});
+							if (dp.isFinished()) {
+								frame.dispose();
+								try {
+									VersionChecker.saveUsingLatestVersion();
+								} catch (IOException e) {
+									e.printStackTrace();
+								}
+								
+								frame.startCapsule(um, args, System.getProperty("capsule_cph", ""));
+							}
+						}, (crash) -> {
+							crash.printStackTrace();
+							JOptionPane.showMessageDialog(frame, "Update Error: " + crash.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+							frame.dispose();
+						});
+					}).start();;
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
@@ -81,7 +84,7 @@ public class UpdateFrame extends JFrame implements ActionListener {
 		});
 	}
 	
-	private void startCapsule(UpdateManager manager, String[] args) {
+	private void startCapsule(UpdateManager manager, String[] args, String cph) {
 		try {
 			String sep = File.pathSeparator; // Windows ;  Linux :
 			
@@ -99,6 +102,12 @@ public class UpdateFrame extends JFrame implements ActionListener {
 			
 			for (String s : args) {
 				arg.add(s);
+			}
+			
+			if (!cph.isEmpty()) {
+				ParsedCapsule list = parseCPH(cph);
+				arg.add(list.type);
+				arg.add(list.id);
 			}
 			
 			System.out.println(java.util.Arrays.toString(arg.toArray(new String[0])));
@@ -122,6 +131,36 @@ public class UpdateFrame extends JFrame implements ActionListener {
 			dispose();
 		}
 	}
+	
+	private static ParsedCapsule parseCPH(String cph) {
+		URI uri = URI.create(cph);
+
+        if (!"capsule".equals(uri.getScheme())) {
+            throw new IllegalArgumentException("Geçersiz protocol: " + uri.getScheme());
+        }
+
+        String type = uri.getHost(); // game, user, vs.
+
+        String path = uri.getPath(); // /12345
+        if (path == null || path.length() <= 1) {
+            throw new IllegalArgumentException("ID bulunamadı");
+        }
+
+        String id = path.substring(1); // baştaki '/' kaldır
+        
+        String capsuleType;
+        if (type.equals("open")) {
+        	capsuleType = "-game";
+        } else if (type.equals("studio")) {
+        	capsuleType = "-studio";
+        } else {
+        	capsuleType = "-game";
+        }
+        
+        return new ParsedCapsule(capsuleType, id);
+	}
+	
+	public record ParsedCapsule(String type, String id) {}
 
 	/**
 	 * Create the frame.
