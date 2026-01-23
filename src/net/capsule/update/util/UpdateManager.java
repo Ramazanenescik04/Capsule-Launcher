@@ -14,13 +14,15 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import net.capsule.Version;
+import net.capsule.update.UpdateFrame;
 
 public class UpdateManager {
 	public static final String GITHUB_REPO_URI = "https://api.github.com/repos/Ramazanenescik04/Capsule/releases/latest";
 	public static final String DE_GITHUB_REPO_URI = "https://api.github.com/repos/Ramazanenescik04/DikenEngine/releases/latest";
+	public static final String CL_GITHUB_REPO_URI = "https://api.github.com/repos/Ramazanenescik04/Capsule-Launcher/releases/latest";
 	public static UpdateManager instance = new UpdateManager();
 	
-	private Version repoVersion = VersionChecker.clientVersion, dikenEngine_repoVerison = VersionChecker.dikenVersion;
+	private Version repoVersion = VersionChecker.clientVersion, dikenEngine_repoVerison = VersionChecker.dikenVersion, clVersion = UpdateFrame.capsuleLauncherVersion;
 	private List<URI> downloadFileURIs = new ArrayList<>();
 	private List<File> libs = new ArrayList<>();
 	
@@ -62,15 +64,46 @@ public class UpdateManager {
 	    return repoVersion.compareTo(VersionChecker.clientVersion) > 0 || dikenEngine_repoVerison.compareTo(VersionChecker.dikenVersion) > 0;
 	}
 	
+	public boolean capsuleLauncherUpdateIsAvailable() {
+		return clVersion.compareTo(UpdateFrame.capsuleLauncherVersion) > 0;
+	}
+	
 	public void downloadCapsuleAndLibs() {
 		downloadFileURIs = new ArrayList<>();
 		libs = new ArrayList<>();
 		
-		getRepoVersionAndDownloadURL();
-		getDikenEngine();
+		checkCapsuleVersion();
+		checkDikenEngineVersion();
+		checkCapsuleLauncherVersion();
 	}
 	
-	private void getDikenEngine() {
+	private void checkCapsuleLauncherVersion() {
+		try {
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(CL_GITHUB_REPO_URI))
+                    .header("Accept", "application/vnd.github+json")
+                    .build();
+
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200) {
+                // JSON Ayrıştırma
+                JSONObject jsonResponse = new JSONObject(response.body());
+
+                // 1. Tag ismini al
+                String tagName = jsonResponse.getString("tag_name");
+                this.clVersion = new Version(tagName);
+            } else {
+                System.out.println("Hata: " + response.statusCode());
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+	}
+	
+	private void checkDikenEngineVersion() {
 		try {
             HttpClient client = HttpClient.newHttpClient();
             HttpRequest request = HttpRequest.newBuilder()
@@ -109,7 +142,7 @@ public class UpdateManager {
         }
 	}
 	
-	private void getRepoVersionAndDownloadURL() {
+	private void checkCapsuleVersion() {
 		try {
             HttpClient client = HttpClient.newHttpClient();
             HttpRequest request = HttpRequest.newBuilder()

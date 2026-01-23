@@ -6,6 +6,7 @@ import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.border.EmptyBorder;
 
+import net.capsule.Version;
 import net.capsule.update.util.UpdateManager;
 import net.capsule.update.util.Util;
 import net.capsule.update.util.VersionChecker;
@@ -17,6 +18,8 @@ import javax.swing.JProgressBar;
 import javax.swing.UIManager;
 import javax.swing.JButton;
 import java.awt.Color;
+import java.awt.Desktop;
+
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.SwingConstants;
@@ -32,6 +35,8 @@ import java.awt.event.ActionListener;
 import java.awt.event.ActionEvent;
 
 public class UpdateFrame extends JFrame implements ActionListener {
+	public static final Version capsuleLauncherVersion = new Version("0.2.0");
+	
 	private static final File capsuleExecLocation = new File(Util.getDirectory() + "jars/Capsule.jar");
 	private static final long serialVersionUID = 1L;
 	private JPanel contentPane;
@@ -43,6 +48,8 @@ public class UpdateFrame extends JFrame implements ActionListener {
 	 */
 	public static void main(String[] args) {
 		VersionChecker.initVersionChecker();
+		UpdateManager um = UpdateManager.instance;
+		um.downloadCapsuleAndLibs();
 		
 		EventQueue.invokeLater(new Runnable() {
 			public void run() {
@@ -54,8 +61,21 @@ public class UpdateFrame extends JFrame implements ActionListener {
 					frame.setVisible(true);
 					
 					new Thread(() ->{
-						UpdateManager um = UpdateManager.instance;
-						um.downloadCapsuleAndLibs();
+						if (um.capsuleLauncherUpdateIsAvailable()) {
+							JOptionPane.showMessageDialog(frame, "Capsule Launcher has an update! Please download the latest version. Click \"OK\" to proceed.");
+							frame.dispose();
+							
+							if (Desktop.isDesktopSupported()) {
+								try {
+									Desktop.getDesktop().browse(URI.create("https://github.com/Ramazanenescik04/Capsule-Launcher/releases/latest/"));
+								} catch (IOException e) {
+									e.printStackTrace();
+								}
+							}
+							
+							return;
+						}
+						
 						um.installAndRunUpdate((dp) -> {
 							frame.bar.setIndeterminate(false);
 							frame.bar.setValue(dp.percent());
