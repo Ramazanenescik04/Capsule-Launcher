@@ -17,9 +17,6 @@ import net.capsule.Version;
 import net.capsule.update.UpdateFrame;
 
 public class UpdateManager {
-	public static final String GITHUB_REPO_URI = "https://api.github.com/repos/Ramazanenescik04/Capsule/releases/latest";
-	public static final String DE_GITHUB_REPO_URI = "https://api.github.com/repos/Ramazanenescik04/DikenEngine/releases/latest";
-	public static final String CL_GITHUB_REPO_URI = "https://api.github.com/repos/Ramazanenescik04/Capsule-Launcher/releases/latest";
 	public static UpdateManager instance = new UpdateManager();
 	
 	private Version repoVersion = VersionChecker.clientVersion, dikenEngine_repoVerison = VersionChecker.dikenVersion, clVersion = UpdateFrame.capsuleLauncherVersion;
@@ -81,8 +78,9 @@ public class UpdateManager {
 		try {
             HttpClient client = HttpClient.newHttpClient();
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(CL_GITHUB_REPO_URI))
+                    .uri(URI.create("http://capsule.net.tr/api/v1/assets/check_update.php?name=launcher"))
                     .header("Accept", "application/vnd.github+json")
+                    .header("User-Agent", "Capsule-UtilDownloadFile/" + UpdateFrame.capsuleLauncherVersion)
                     .build();
 
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
@@ -107,8 +105,9 @@ public class UpdateManager {
 		try {
             HttpClient client = HttpClient.newHttpClient();
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(DE_GITHUB_REPO_URI))
+                    .uri(URI.create("http://capsule.net.tr/api/v1/assets/check_update.php?name=engine"))
                     .header("Accept", "application/vnd.github+json")
+                    .header("User-Agent", "Capsule-UtilDownloadFile/" + UpdateFrame.capsuleLauncherVersion)
                     // .header("Authorization", "Bearer YOUR_TOKEN") // Hız sınırı için gerekebilir
                     .build();
 
@@ -146,8 +145,9 @@ public class UpdateManager {
 		try {
             HttpClient client = HttpClient.newHttpClient();
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(GITHUB_REPO_URI))
+                    .uri(URI.create("http://capsule.net.tr/api/v1/assets/check_update.php?name=capsule"))
                     .header("Accept", "application/vnd.github+json")
+                    .header("User-Agent", "Capsule-UtilDownloadFile/" + UpdateFrame.capsuleLauncherVersion)
                     // .header("Authorization", "Bearer YOUR_TOKEN") // Hız sınırı için gerekebilir
                     .build();
 
@@ -176,6 +176,7 @@ public class UpdateManager {
                 }
             } else {
                 System.out.println("Hata: " + response.statusCode());
+                System.out.println(response.body());
             }
 
         } catch (Exception e) {

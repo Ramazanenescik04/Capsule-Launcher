@@ -21,6 +21,7 @@ import java.util.function.Consumer;
 import javax.imageio.ImageIO;
 
 import net.capsule.update.SystemInfo;
+import net.capsule.update.UpdateFrame;
 
 public class Util {
    public static String linuxHomeDir;
@@ -154,7 +155,7 @@ public class Util {
 
 	       HttpRequest request = HttpRequest.newBuilder()
 	    		   .uri(uri)
-	    		   .header("User-Agent", "Capsule-UtilDownloadFile")
+	    		   .header("User-Agent", "Capsule-UtilDownloadFile/" + UpdateFrame.capsuleLauncherVersion)
 	    		   .header("Cache-Control", "no-cache")
 	    		   .header("Pragma", "no-cache")
 	               .GET()

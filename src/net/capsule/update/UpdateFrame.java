@@ -35,7 +35,7 @@ import java.awt.event.ActionListener;
 import java.awt.event.ActionEvent;
 
 public class UpdateFrame extends JFrame implements ActionListener {
-	public static final Version capsuleLauncherVersion = new Version("0.2.1");
+	public static final Version capsuleLauncherVersion = new Version("0.2.2");
 	
 	private static final File capsuleExecLocation = new File(Util.getDirectory() + "jars/Capsule.jar");
 	private static final long serialVersionUID = 1L;
@@ -139,7 +139,7 @@ public class UpdateFrame extends JFrame implements ActionListener {
 
             String line;
             while ((line = br.readLine()) != null) {
-                System.out.println("Error: " + line);
+                System.err.println(line);
             }
 
             // Wait for the process to finish
