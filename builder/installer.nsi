@@ -23,10 +23,10 @@ Section "Install"
   File /r "runtime"
 
   CreateShortCut "$DESKTOP\Capsule Player.lnk" "$INSTDIR\Capsule.exe"
-  CreateShortCut "$DESKTOP\Capsule Studio.lnk" "$INSTDIR\Capsule.exe -studio"
+  CreateShortCut "$DESKTOP\Capsule Studio.lnk" "$INSTDIR\Capsule.exe" "-studio"
   CreateDirectory "$SMPROGRAMS\Capsule"
   CreateShortCut "$SMPROGRAMS\Capsule\Capsule Player.lnk" "$INSTDIR\Capsule.exe"
-  CreateShortCut "$SMPROGRAMS\Capsule\Capsule Studio.lnk" "$INSTDIR\Capsule.exe"
+  CreateShortCut "$SMPROGRAMS\Capsule\Capsule Studio.lnk" "$INSTDIR\Capsule.exe" "-studio"
 
 
   ; --------------------
