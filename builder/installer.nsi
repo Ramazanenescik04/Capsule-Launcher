@@ -22,11 +22,15 @@ Section "Install"
   ; runtime (jlink çıktısı)
   File /r "runtime"
 
-  CreateShortCut "$DESKTOP\Capsule Player.lnk" "$INSTDIR\Capsule.exe"
-  CreateShortCut "$DESKTOP\Capsule Studio.lnk" "$INSTDIR\Capsule.exe" "-studio"
+  ; iconlar
+  File "player.ico"
+  File "studio.ico"
+
+  CreateShortCut "$DESKTOP\Capsule Player.lnk" "$INSTDIR\Capsule.exe" "" "$INSTDIR\player.ico"
+  CreateShortCut "$DESKTOP\Capsule Studio.lnk" "$INSTDIR\Capsule.exe" "-studio" "$INSTDIR\studio.ico"
   CreateDirectory "$SMPROGRAMS\Capsule"
-  CreateShortCut "$SMPROGRAMS\Capsule\Capsule Player.lnk" "$INSTDIR\Capsule.exe"
-  CreateShortCut "$SMPROGRAMS\Capsule\Capsule Studio.lnk" "$INSTDIR\Capsule.exe" "-studio"
+  CreateShortCut "$SMPROGRAMS\Capsule\Capsule Player.lnk" "$INSTDIR\Capsule.exe" "" "$INSTDIR\player.ico"
+  CreateShortCut "$SMPROGRAMS\Capsule\Capsule Studio.lnk" "$INSTDIR\Capsule.exe" "-studio" "$INSTDIR\studio.ico"
 
 
   ; --------------------
