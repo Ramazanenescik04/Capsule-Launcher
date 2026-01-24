@@ -35,7 +35,7 @@ import java.awt.event.ActionListener;
 import java.awt.event.ActionEvent;
 
 public class UpdateFrame extends JFrame implements ActionListener {
-	public static final Version capsuleLauncherVersion = new Version("0.2.0");
+	public static final Version capsuleLauncherVersion = new Version("0.2.1");
 	
 	private static final File capsuleExecLocation = new File(Util.getDirectory() + "jars/Capsule.jar");
 	private static final long serialVersionUID = 1L;
@@ -89,7 +89,7 @@ public class UpdateFrame extends JFrame implements ActionListener {
 									e.printStackTrace();
 								}
 								
-								frame.startCapsule(um, args, System.getProperty("capsule_cph", ""));
+								frame.startCapsule(um, args);
 							}
 						}, (crash) -> {
 							crash.printStackTrace();
@@ -104,7 +104,7 @@ public class UpdateFrame extends JFrame implements ActionListener {
 		});
 	}
 	
-	private void startCapsule(UpdateManager manager, String[] args, String cph) {
+	private void startCapsule(UpdateManager manager, String[] args) {
 		try {
 			String sep = File.pathSeparator; // Windows ;  Linux :
 			
@@ -120,14 +120,14 @@ public class UpdateFrame extends JFrame implements ActionListener {
 			arg.add(cpBuilder.toString());
 			arg.add("net.capsule.Capsule");
 			
-			for (String s : args) {
-				arg.add(s);
-			}
-			
-			if (!cph.isEmpty()) {
-				ParsedCapsule list = parseCPH(cph);
+			if (args.length > 0 && args[0].startsWith("capsule://")) {
+				ParsedCapsule list = parseCPH(args[0]);
 				arg.add(list.type);
 				arg.add(list.id);
+			} else {
+				for (String s : args) {
+					arg.add(s);
+				}
 			}
 			
 			System.out.println(java.util.Arrays.toString(arg.toArray(new String[0])));
