@@ -16,7 +16,6 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import javax.swing.JProgressBar;
 import javax.swing.UIManager;
-import javax.swing.JButton;
 import java.awt.Color;
 import java.awt.Desktop;
 
@@ -28,6 +27,8 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,7 +36,7 @@ import java.awt.event.ActionListener;
 import java.awt.event.ActionEvent;
 
 public class UpdateFrame extends JFrame implements ActionListener {
-	public static final Version capsuleLauncherVersion = new Version("0.2.2");
+	public static final Version capsuleLauncherVersion = new Version("0.3.0");
 	
 	private static final File capsuleExecLocation = new File(Util.getDirectory() + "jars/Capsule.jar");
 	private static final long serialVersionUID = 1L;
@@ -48,62 +49,78 @@ public class UpdateFrame extends JFrame implements ActionListener {
 	 */
 	public static void main(String[] args) {
 		VersionChecker.initVersionChecker();
-		UpdateManager um = UpdateManager.instance;
-		um.downloadCapsuleAndLibs();
 		
-		EventQueue.invokeLater(new Runnable() {
-			public void run() {
-				try {
-					UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-					
-					UpdateFrame frame = new UpdateFrame();
-					frame.setLocationRelativeTo(null);
-					frame.setVisible(true);
-					
-					new Thread(() ->{
-						if (um.capsuleLauncherUpdateIsAvailable()) {
-							JOptionPane.showMessageDialog(frame, "Capsule Launcher has an update! Please download the latest version. Click \"OK\" to proceed.");
-							frame.dispose();
-							
-							if (Desktop.isDesktopSupported()) {
-								try {
-									Desktop.getDesktop().browse(URI.create("https://github.com/Ramazanenescik04/Capsule-Launcher/releases/latest/"));
-								} catch (IOException e) {
-									e.printStackTrace();
-								}
-							}
-							
-							return;
-						}
-						
-						um.installAndRunUpdate((dp) -> {
-							frame.bar.setIndeterminate(false);
-							frame.bar.setValue(dp.percent());
-							frame.statusText.setText(dp.progressName() + " - " + dp.toString());
-							
-							if (dp.isFinished()) {
-								frame.dispose();
-								try {
-									VersionChecker.saveUsingLatestVersion();
-								} catch (IOException e) {
-									e.printStackTrace();
-								}
-								
-								frame.startCapsule(um, args);
-							}
-						}, (crash) -> {
-							crash.printStackTrace();
-							JOptionPane.showMessageDialog(frame, "Update Error: " + crash.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-							frame.dispose();
-						});
-					}).start();;
-				} catch (Exception e) {
-					e.printStackTrace();
-				}
+		EventQueue.invokeLater(() -> {
+			try {
+				UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+				
+				UpdateFrame frame = new UpdateFrame();
+				frame.setLocationRelativeTo(null);
+				frame.setVisible(true);
+				
+				// 2 saniye sonra devam et
+			    new javax.swing.Timer(2000, e -> {
+			        ((javax.swing.Timer) e.getSource()).stop();
+			        startLauncherLogic(frame, args);
+			    }).start();
+			    
+			} catch (Exception e) {
+				e.printStackTrace();
+				
+				StringWriter writer = new StringWriter();
+				e.printStackTrace(new PrintWriter(writer));
+				
+				JOptionPane.showMessageDialog(null, "Update Error: " + writer.toString(), "Error", JOptionPane.ERROR_MESSAGE);
+				System.exit(1);
 			}
 		});
 	}
 	
+	private static void startLauncherLogic(UpdateFrame frame, String[] args) {
+		UpdateManager um = UpdateManager.instance;
+		um.downloadCapsuleAndLibs();
+		
+		new Thread(() ->{
+			if (um.capsuleLauncherUpdateIsAvailable()) {
+				JOptionPane.showMessageDialog(frame, "Capsule Launcher has an update! Please download the latest version. Click \"OK\" to proceed.");
+				frame.dispose();
+				
+				if (Desktop.isDesktopSupported()) {
+					try {
+						Desktop.getDesktop().browse(URI.create("https://github.com/Ramazanenescik04/Capsule-Launcher/releases/latest/"));
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				}
+				
+				return;
+			}
+			
+			um.installAndRunUpdate((dp) -> {
+				frame.bar.setIndeterminate(false);
+				frame.bar.setValue(dp.percent());
+				frame.statusText.setText(dp.progressName() + " - " + dp.toString());
+				
+				if (dp.isFinished()) {
+					frame.dispose();
+					try {
+						VersionChecker.saveUsingLatestVersion();
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+					
+					frame.startCapsule(um, args);
+				}
+			}, (crash) -> {
+				crash.printStackTrace();
+				JOptionPane.showMessageDialog(frame, "Update Error: " + crash.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+				frame.dispose();
+				
+				System.exit(1);
+			});
+		}).start();;
+	}
+
 	private void startCapsule(UpdateManager manager, String[] args) {
 		try {
 			String sep = File.pathSeparator; // Windows ;  Linux :
@@ -116,6 +133,7 @@ public class UpdateFrame extends JFrame implements ActionListener {
 			
 			List<String> arg = new ArrayList<>();
 			arg.add("java");
+			arg.add("--enable-native-access=ALL-UNNAMED");
 			arg.add("-cp");
 			arg.add(cpBuilder.toString());
 			arg.add("net.capsule.Capsule");
@@ -129,8 +147,6 @@ public class UpdateFrame extends JFrame implements ActionListener {
 					arg.add(s);
 				}
 			}
-			
-			System.out.println(java.util.Arrays.toString(arg.toArray(new String[0])));
 			
 			Process p = Runtime.getRuntime().exec(arg.toArray(new String[0]));
 			// Get the error stream
@@ -149,6 +165,8 @@ public class UpdateFrame extends JFrame implements ActionListener {
 			e.printStackTrace();
 			JOptionPane.showMessageDialog(this, "Launch Error: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
 			dispose();
+			
+			System.exit(1);
 		}
 	}
 	
@@ -190,7 +208,7 @@ public class UpdateFrame extends JFrame implements ActionListener {
 		setResizable(false);
 		setTitle("Capsule Launcher");
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		setBounds(100, 100, 650, 397);
+		setBounds(100, 100, 633, 397);
 		contentPane = new JPanel();
 		contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
 		setContentPane(contentPane);
@@ -206,13 +224,9 @@ public class UpdateFrame extends JFrame implements ActionListener {
 		bar.setStringPainted(true);
 		bar.setIndeterminate(true);
 		bar.setFont(new Font("Tahoma", Font.BOLD, 17));
-		bar.setPreferredSize(new Dimension(500,30));
+		bar.setPreferredSize(new Dimension(600,30));
 		downPanel.add(bar);
-		
-		JButton cancelButton = new JButton("Cancel");
-		cancelButton.addActionListener(this);
-		cancelButton.setPreferredSize(new Dimension(100, 33));
-		downPanel.add(cancelButton);
+		bar.addNotify();
 		
 		JPanel panel = new ImagePanel();
 		contentPane.add(panel, BorderLayout.CENTER);
@@ -228,10 +242,5 @@ public class UpdateFrame extends JFrame implements ActionListener {
 
 	@Override
 	public void actionPerformed(ActionEvent e) {
-		int a = JOptionPane.showConfirmDialog(UpdateFrame.this, "Are you sure you want to cancel?", "Capsule Launcher", JOptionPane.YES_NO_OPTION);
-		if (a == JOptionPane.YES_OPTION) {
-			UpdateFrame.this.dispose();
-			System.exit(0);
-		}
 	}
 }
