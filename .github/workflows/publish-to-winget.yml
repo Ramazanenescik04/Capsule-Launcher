@@ -1,149 +1,171 @@
-on:
-  release:
-    types: [published]
+steps:
+  - name: Checkout this repo
+    uses: actions/checkout@v4
 
-env:
-  # Paket kimliği isteğe göre değiştirildi:
-  PACKAGE_IDENTIFIER: "EmirE.Capsule"
-  WINGET_PKGS_UPSTREAM: "microsoft/winget-pkgs"
+  - name: Install tools
+    run: |
+      sudo apt-get update -y
+      sudo apt-get install -y jq curl gh git wget unzip
 
-name: Publish winget manifest on Release
+  - name: Prepare variables
+    id: vars
+    run: |
+      TAG="${{ github.event.release.tag_name }}"
+      VERSION="${TAG#v}"       # strip leading v if present
+      echo "tag=$TAG" >> $GITHUB_OUTPUT
+      echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-jobs:
-  publish-to-winget:
-    name: Create winget-pkgs PR for new release
-    runs-on: ubuntu-latest
+  - name: Get first release asset download URL (if any)
+    id: asset
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    run: |
+      TAG="${{ steps.vars.outputs.tag }}"
+      API="https://api.github.com/repos/${{ github.repository }}/releases/tags/${TAG}"
+      ASSET_URL=$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${GITHUB_TOKEN}" "${API}" | jq -r '.assets[0].browser_download_url // empty')
+      echo "asset_url=${ASSET_URL}" >> $GITHUB_OUTPUT
 
-    steps:
-      - name: Checkout this repo
-        uses: actions/checkout@v4
+  - name: Download asset and compute SHA256 (if asset exists)
+    id: checksum
+    run: |
+      ASSET_URL="${{ steps.asset.outputs.asset_url }}"
+      if [ -n "$ASSET_URL" ]; then
+        echo "Found asset: $ASSET_URL"
+        FNAME="release-asset-$(date +%s)"
+        curl -L -s -o "$FNAME" "$ASSET_URL"
+        SHA256=$(sha256sum "$FNAME" | awk '{print $1}')
+        FILESIZE=$(stat -c%s "$FNAME")
+        echo "asset_name=$FNAME" >> $GITHUB_OUTPUT
+        echo "asset_sha256=$SHA256" >> $GITHUB_OUTPUT
+        echo "asset_size=$FILESIZE" >> $GITHUB_OUTPUT
+      else
+        echo "No asset found in release"
+        echo "asset_name=" >> $GITHUB_OUTPUT
+        echo "asset_sha256=" >> $GITHUB_OUTPUT
+        echo "asset_size=" >> $GITHUB_OUTPUT
+      fi
 
-      - name: Install tools
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y jq curl gh git wget unzip
+  - name: Clone your fork of winget-pkgs
+    env:
+      WINGET_PKS_PAT: ${{ secrets.WINGET_PKS_PAT }}
+      WINGET_PKS_FORK: ${{ secrets.WINGET_PKS_FORK }}
+    run: |
+      # WINGET_PKS_FORK secret should be like "Ramazanenescik04/winget-pkgs".
+      FORK="${WINGET_PKS_FORK:-Ramazanenescik04/winget-pkgs}"
+      echo "Cloning fork: $FORK"
+      git clone "https://x-access-token:${WINGET_PKS_PAT}@github.com/${FORK}.git" winget-pkgs
+      cd winget-pkgs
+      git remote add upstream "https://github.com/${{ env.WINGET_PKGS_UPSTREAM }}.git"
+      git fetch upstream
+      # create safe branch name (replace dots with hyphens)
+      BRANCH=$(echo "add-${PACKAGE_IDENTIFIER}-${{ steps.vars.outputs.version }}" | tr '.' '-')
+      git checkout -b "${BRANCH}" || git checkout "${BRANCH}"
+      echo "working branch: ${BRANCH}"
 
-      - name: Prepare variables
-        id: vars
-        run: |
-          TAG="${{ github.event.release.tag_name }}"
-          VERSION="${TAG#v}"       # strip leading v if present
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+  - name: Create Installer + Locale + Package manifest files
+    working-directory: winget-pkgs
+    run: |
+      set -e
+      VERSION="${{ steps.vars.outputs.version }}"
+      TAG="${{ steps.vars.outputs.tag }}"
+      PKG_ID="${PACKAGE_IDENTIFIER}"
+      ASSET_URL="${{ steps.asset.outputs.asset_url }}"
+      ASSET_SHA256="${{ steps.checksum.outputs.asset_sha256 }}"
+      ASSET_SIZE="${{ steps.checksum.outputs.asset_size }}"
+      RELEASE_HTML="${{ github.event.release.html_url }}"
+      RELEASE_BODY="${{ github.event.release.body }}"
 
-      - name: Get first release asset download URL (if any)
-        id: asset
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="${{ steps.vars.outputs.tag }}"
-          API="https://api.github.com/repos/${{ github.repository }}/releases/tags/${TAG}"
-          ASSET_URL=$(curl -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${GITHUB_TOKEN}" "${API}" | jq -r '.assets[0].browser_download_url // empty')
-          echo "asset_url=${ASSET_URL}" >> $GITHUB_OUTPUT
+      # Convert package id to directory-friendly path (EmirE.Capsule -> EmirE/Capsule)
+      DIR=$(echo "${PKG_ID}" | tr '.' '/')
+      VERSION_DIR="manifests/${DIR}/${VERSION}"
+      PKG_DIR="manifests/${DIR}"
 
-      - name: Download asset and compute SHA256 (if asset exists)
-        id: checksum
-        run: |
-          ASSET_URL="${{ steps.asset.outputs.asset_url }}"
-          if [ -n "$ASSET_URL" ]; then
-            echo "Found asset: $ASSET_URL"
-            FNAME="release-asset-$(date +%s)"
-            curl -L -s -o "$FNAME" "$ASSET_URL"
-            SHA256=$(sha256sum "$FNAME" | awk '{print $1}')
-            FILESIZE=$(stat -c%s "$FNAME")
-            echo "asset_name=$FNAME" >> $GITHUB_OUTPUT
-            echo "asset_sha256=$SHA256" >> $GITHUB_OUTPUT
-            echo "asset_size=$FILESIZE" >> $GITHUB_OUTPUT
-          else
-            echo "No asset found in release"
-            echo "asset_name=" >> $GITHUB_OUTPUT
-            echo "asset_sha256=" >> $GITHUB_OUTPUT
-            echo "asset_size=" >> $GITHUB_OUTPUT
-          fi
+      mkdir -p "${VERSION_DIR}"
 
-      - name: Clone your fork of winget-pkgs
-        env:
-          WINGET_PKS_PAT: ${{ secrets.WINGET_PKS_PAT }}
-          WINGET_PKS_FORK: ${{ secrets.WINGET_PKS_FORK }}
-        run: |
-          # WINGET_PKS_FORK secret should be like "Ramazanenescik04/winget-pkgs".
-          FORK="${WINGET_PKS_FORK:-Ramazanenescik04/winget-pkgs}"
-          echo "Cloning fork: $FORK"
-          git clone "https://x-access-token:${WINGET_PKS_PAT}@github.com/${FORK}.git" winget-pkgs
-          cd winget-pkgs
-          git remote add upstream "https://github.com/${{ env.WINGET_PKGS_UPSTREAM }}.git"
-          git fetch upstream
-          BRANCH="add-${{ env.PACKAGE_IDENTIFIER }}-${{ steps.vars.outputs.version }}"
-          # create new branch
-          git checkout -b "${BRANCH}" || git checkout "${BRANCH}"
-          echo "working branch: ${BRANCH}"
+      # Installer manifest (Installer type: nullsoft for NSIS)
+      cat > "${VERSION_DIR}/Installer.yaml" <<EOF
+      PackageIdentifier: ${PKG_ID}
+      PackageVersion: ${VERSION}
+      Channel: stable
+      Installers:
+        - Architecture: x64
+          InstallerUrl: "${ASSET_URL}"
+          InstallerSha256: "${ASSET_SHA256}"
+          InstallerType: nullsoft
+          Scope: machine
+          InstallerSize: ${ASSET_SIZE}
+      EOF
 
-      - name: Create manifest (sets InstallerType: nullsoft)
-        working-directory: winget-pkgs
-        run: |
-          VERSION="${{ steps.vars.outputs.version }}"
-          PKG_ID="${PACKAGE_IDENTIFIER}"
-          # Convert package id to directory-friendly path (EmirE.Capsule -> EmirE/Capsule)
-          DIR=$(echo "${PKG_ID}" | tr '.' '/')
-          MANIFEST_DIR="manifests/${DIR}/${VERSION}"
-          mkdir -p "${MANIFEST_DIR}"
+      # Locale manifest (English - en-US). Change to another locale if you prefer (e.g. tr-TR).
+      cat > "${VERSION_DIR}/Locale.en-US.yaml" <<EOF
+      PackageIdentifier: ${PKG_ID}
+      PackageVersion: ${VERSION}
+      PackageName: Capsule
+      Publisher: EmirE
+      ShortDescription: Capsule Launcher
+      ReleaseNotes: |
+        ${RELEASE_BODY}
+      ReleaseNotesUrl: "${RELEASE_HTML}"
+      License: MIT
+      InstallerLocale:
+        - en-US
+      EOF
 
-          # Create a simple Installer.yaml using nullsoft (NSIS) installer type
-          cat > "${MANIFEST_DIR}/Installer.yaml" <<EOF
-          PackageIdentifier: ${PKG_ID}
-          PackageVersion: ${VERSION}
-          Channel: stable
-          Installer:
-            - Architecture: x64
-              InstallerUrl: "${{ steps.asset.outputs.asset_url }}"
-              InstallerSha256: "${{ steps.checksum.outputs.asset_sha256 }}"
-              InstallerType: nullsoft
-              Scope: machine
-              InstallerSize: ${ { steps.checksum.outputs.asset_size } }
-          EOF
+      # Top-level package manifest (lists versions). This file lives at manifests/<Publisher>/<Package>/manifest.yaml
+      mkdir -p "${PKG_DIR}"
+      # If there is an existing manifest.yaml, preserve versions and append if not present.
+      MANIFEST_FILE="${PKG_DIR}/manifest.yaml"
+      if [ -f "${MANIFEST_FILE}" ]; then
+        # naive: add version if missing (keeps existing file if present)
+        if ! grep -q "${VERSION}" "${MANIFEST_FILE}"; then
+          # append new version entry under Versions:
+          # Note: for a production-ready flow you might want to parse YAML instead of naive edits.
+          echo "Adding ${VERSION} to existing ${MANIFEST_FILE}"
+          awk -v ver="${VERSION}" '/^Versions:/ { print; print "  - " ver; next }1' "${MANIFEST_FILE}" > "${MANIFEST_FILE}.tmp" && mv "${MANIFEST_FILE}.tmp" "${MANIFEST_FILE}"
+        else
+          echo "Version ${VERSION} already listed in ${MANIFEST_FILE}"
+        fi
+      else
+        cat > "${MANIFEST_FILE}" <<EOF
+        PackageIdentifier: ${PKG_ID}
+        PackageName: Capsule
+        Publisher: EmirE
+        License: MIT
+        ShortDescription: Capsule Launcher
+        Tags:
+          - capsule
+          - launcher
+        Versions:
+          - ${VERSION}
+        EOF
+      fi
 
-          # Basic package metadata (top-level manifest file for this package)
-          PKG_DIR="manifests/${DIR}"
-          mkdir -p "${PKG_DIR}"
-          cat > "${PKG_DIR}/manifest.yaml" <<EOF
-          PackageIdentifier: ${PKG_ID}
-          PackageName: Capsule
-          Publisher: EmirE
-          License: MIT
-          ShortDescription: Capsule Launcher
-          Tags:
-            - capsule
-            - launcher
-          Versions:
-            - ${VERSION}
-          EOF
+      echo "Created manifests:"
+      ls -R "manifests/${DIR}" || true
 
-      - name: Commit, push branch to fork
-        working-directory: winget-pkgs
-        env:
-          WINGET_PKS_PAT: ${{ secrets.WINGET_PKS_PAT }}
-        run: |
-          git add --all
-          git commit -m "winget: add ${PACKAGE_IDENTIFIER} ${ { steps.vars.outputs.version } }" || echo "No changes to commit"
-          BRANCH=$(git rev-parse --abbrev-ref HEAD)
-          git push -u origin "${BRANCH}"
+  - name: Commit, push branch to fork
+    working-directory: winget-pkgs
+    env:
+      WINGET_PKS_PAT: ${{ secrets.WINGET_PKS_PAT }}
+    run: |
+      git add --all
+      git commit -m "winget: add ${PACKAGE_IDENTIFIER} ${ { steps.vars.outputs.version } }" || echo "No changes to commit"
+      BRANCH=$(git rev-parse --abbrev-ref HEAD)
+      git push -u origin "${BRANCH}"
 
-      - name: Create PR to microsoft/winget-pkgs
-        working-directory: winget-pkgs
-        env:
-          WINGET_PKS_PAT: ${{ secrets.WINGET_PKS_PAT }}
-        run: |
-          # Authenticate gh CLI with the provided PAT
-          echo "${WINGET_PKS_PAT}" | gh auth login --with-token
-          BRANCH=$(git rev-parse --abbrev-ref HEAD)
-          # Derive fork owner from remote origin url (e.g. https://.../owner/winget-pkgs.git)
-          ORIGIN_URL=$(git config --get remote.origin.url)
-          FORK_OWNER=$(echo "${ORIGIN_URL}" | sed -n 's#.*/\([^/]*\)/\([^/.]*\)\.git#\1#p')
-          # Create PR targeting microsoft/winget-pkgs
-          gh pr create --repo "${{ env.WINGET_PKGS_UPSTREAM }}" \
-            --title "Add ${PACKAGE_IDENTIFIER} ${ { steps.vars.outputs.version } }" \
-            --body "Automated manifest: add ${PACKAGE_IDENTIFIER} ${ { steps.vars.outputs.version } } from release ${{ github.event.release.tag_name }}" \
-            --head "${FORK_OWNER}:${BRANCH}" --base "main" || true
+  - name: Create PR to microsoft/winget-pkgs
+    working-directory: winget-pkgs
+    env:
+      WINGET_PKS_PAT: ${{ secrets.WINGET_PKS_PAT }}
+    run: |
+      echo "${WINGET_PKS_PAT}" | gh auth login --with-token
+      BRANCH=$(git rev-parse --abbrev-ref HEAD)
+      ORIGIN_URL=$(git config --get remote.origin.url)
+      FORK_OWNER=$(echo "${ORIGIN_URL}" | sed -n 's#.*/\([^/]*\)/\([^/.]*\)\.git#\1#p')
+      gh pr create --repo "${{ env.WINGET_PKGS_UPSTREAM }}" \
+        --title "Add ${PACKAGE_IDENTIFIER} ${ { steps.vars.outputs.version } }" \
+        --body "Automated manifest: add ${PACKAGE_IDENTIFIER} ${ { steps.vars.outputs.version } } from release ${{ steps.vars.outputs.tag }}" \
+        --head "${FORK_OWNER}:${BRANCH}" --base "main" || true
 
-      - name: Done
-        run: echo "Manifest PR submitted (if everything succeeded). Check the PR in https://github.com/${{ env.WINGET_PKGS_UPSTREAM }}/pulls"
+  - name: Done
+    run: echo "Installer, Locale and package manifest files created and PR requested. Check https://github.com/${{ env.WINGET_PKGS_UPSTREAM }}/pulls"
