@@ -68,7 +68,7 @@ Section "Install"
   ; Programı çalıştır
   ; --------------------
   Exec '"$INSTDIR\Capsule.exe"'
-
+  Quit
 SectionEnd
 
 Section "Uninstall"

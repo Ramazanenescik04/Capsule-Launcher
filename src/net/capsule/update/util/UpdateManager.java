@@ -102,10 +102,9 @@ public class UpdateManager {
         var launcherFuture = CompletableFuture.runAsync(this::checkCapsuleLauncherVersion);
         var engineFuture = CompletableFuture.runAsync(this::checkDikenEngineVersion);
         var capsuleFuture = CompletableFuture.runAsync(this::checkCapsuleVersion);
-        var lwjglFuture = CompletableFuture.runAsync(this::checkCustomLWJGLVersion);
 
         // Tüm isteklerin bitmesini bekle
-        CompletableFuture.allOf(launcherFuture, engineFuture, capsuleFuture, lwjglFuture).join();
+        CompletableFuture.allOf(launcherFuture, engineFuture, capsuleFuture).join();
     }
 
     // --- Private Helper Methods ---
@@ -168,18 +167,6 @@ public class UpdateManager {
             e.printStackTrace();
         }
     }
-    
-    private void checkCustomLWJGLVersion() {
-        try {
-            JSONObject json = fetchUpdateData("lwjgl2");
-            if (json != null) {                
-                // Engine için tüm assetleri indir
-                parseAndAddAssets(json.getJSONArray("assets"), null); 
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
 
     /**
      * JSON Assets arrayini parse eder ve indirme listesine ekler.
@@ -203,4 +190,8 @@ public class UpdateManager {
             }
         }
     }
+
+	public String getLatestLauncherVersion() {
+		return this.clVersion.toString();
+	}
 }

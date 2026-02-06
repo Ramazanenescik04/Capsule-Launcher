@@ -36,7 +36,7 @@ import java.awt.event.ActionListener;
 import java.awt.event.ActionEvent;
 
 public class UpdateFrame extends JFrame implements ActionListener {
-	public static final Version capsuleLauncherVersion = new Version("0.3.0");
+	public static final Version capsuleLauncherVersion = new Version("0.3.1");
 	
 	private static final File capsuleExecLocation = new File(Util.getDirectory() + "jars/Capsule.jar");
 	private static final long serialVersionUID = 1L;
@@ -82,17 +82,46 @@ public class UpdateFrame extends JFrame implements ActionListener {
 		
 		new Thread(() ->{
 			if (um.capsuleLauncherUpdateIsAvailable()) {
-				JOptionPane.showMessageDialog(frame, "Capsule Launcher has an update! Please download the latest version. Click \"OK\" to proceed.");
-				frame.dispose();
+				frame.statusText.setText("Capsule Launcher has an update. " + capsuleLauncherVersion.toString() + " -> " + um.getLatestLauncherVersion());
 				
-				if (Desktop.isDesktopSupported()) {
+				// TODO: Cross-platform support
+				File launcherFile = new File(Util.getDirectory() + "CapsuleSetup.exe");
+				try {
+					launcherFile = File.createTempFile("new_launcher_", ".exe");
+					Util.downloadFile(URI.create("https://github.com/Ramazanenescik04/Capsule-Launcher/releases/download/" + um.getLatestLauncherVersion() + "/CapsuleSetup.exe"),
+							launcherFile,
+							dp -> {
+								frame.bar.setIndeterminate(false);
+								frame.bar.setValue(dp.percent());
+								frame.statusText.setText("Loading Launcher - " + dp.toString());
+								
+								if (dp.isFinished()) {
+									frame.dispose();
+								}
+							});
+				} catch (IOException | InterruptedException e) {
+					e.printStackTrace();
+					
+					if (Desktop.isDesktopSupported()) {
+					    try {
+					        Desktop.getDesktop().browse(URI.create("https://github.com/Ramazanenescik04/Capsule-Launcher/releases/latest"));
+					    } catch (IOException ex) {
+					    	ex.printStackTrace();
+					    }
+					    System.exit(1);
+					}
+				} finally {
+					launcherFile.deleteOnExit();
+					
 					try {
-						Desktop.getDesktop().browse(URI.create("https://github.com/Ramazanenescik04/Capsule-Launcher/releases/latest/"));
-					} catch (IOException e) {
+						Process p = Runtime.getRuntime().exec(new String[] {"cmd", "/c", "start", "\"\"", launcherFile.getAbsolutePath()});
+						p.waitFor();
+						System.exit(0);
+					} catch (IOException | InterruptedException e) {
 						e.printStackTrace();
+						System.exit(1);
 					}
 				}
-				
 				return;
 			}
 			
